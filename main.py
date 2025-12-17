@@ -65,19 +65,20 @@ def get_data():
 
 data, price, week_c, month_c, ytd_c, vol = get_data()
 
-# --- 1. MARKET OVERVIEW ---
+# --- 1. MARKET OVERVIEW (HTML-FIXED) ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
 
-# Price stays in standard UI
-c1.metric("Current Price", f"${price:,.2f}")
+# Price stays standard (labels and values are separate)
+c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
 
-# Others use our HTML fix
-colored_metric(c2, "Weekly Change", f"{week_c:+.2f}%")
-colored_metric(c3, "Monthly Change", f"{month_c:+.2f}%")
-colored_metric(c4, "YTD Change", f"{ytd_c:+.2f}%")
+# We use the custom HTML function for Columns 2-5 to ensure colors WORK.
+# Usage: colored_metric(column, label, display_text, numerical_value, is_vol=False)
+colored_metric(c2, "Weekly Change", f"{week_c:+.2f}%", week_c)
+colored_metric(c3, "Monthly Change", f"{month_c:+.2f}%", month_c)
+colored_metric(c4, "YTD Change", f"{ytd_c:+.2f}%", ytd_c)
 
-# VOLATILITY ADJUSTMENT: Passing 'is_vol=True'
+# VOLATILITY: We set is_vol=True so it doesn't try to use green/red logic
 colored_metric(c5, "Volatility", f"{vol:.2f}%", vol, is_vol=True)
 
 st.divider()
