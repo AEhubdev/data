@@ -42,23 +42,20 @@ st.markdown("""
         border-bottom: 1px solid #363A45;
     }
 
-    /* News Styling */
+    /* Fixed News Link Styling */
     .news-link {
         color: #FFD700 !important;
-        font-size: 18px !important;
+        font-size: 16px !important;
         font-weight: bold !important;
         text-decoration: none !important;
         display: block;
-        padding: 12px;
+        padding: 10px;
         background-color: #1E222D;
         border-radius: 5px;
         margin-bottom: 8px;
         border: 1px solid #363A45;
     }
-    .news-link:hover {
-        background-color: #262B3D;
-        border-color: #FFD700;
-    }
+    .news-link:hover { background-color: #262B3D; border-color: #FFD700; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -74,8 +71,7 @@ def colored_metric(col, label, val_text, delta_val, is_vol=False):
 
 @st.cache_data(ttl=60)
 def get_data():
-    ticker_symbol = "GC=F"
-    ticker_obj = yf.Ticker(ticker_symbol)
+    ticker_obj = yf.Ticker("GC=F")
     df = ticker_obj.history(start="2024-09-01")
     if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
@@ -86,7 +82,6 @@ def get_data():
     df['BB_U'] = df['MA20'] + (std * 2)
     df['BB_L'] = df['MA20'] - (std * 2)
 
-    # RSI, MACD, Stoch
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -97,14 +92,13 @@ def get_data():
     df['MACD'] = ema12 - ema26
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
-
     df['STOCH_K'] = (df['Close'] - df['Low'].rolling(14).min()) * 100 / (
-            df['High'].rolling(14).max() - df['Low'].rolling(14).min())
+                df['High'].rolling(14).max() - df['Low'].rolling(14).min())
 
     return df[df.index >= "2025-01-01"], float(df['Close'].iloc[-1]), df, ticker_obj.news
 
 
-data_display, price, df_full, gold_news = get_data()
+data_display, price, df_full, raw_news = get_data()
 data = data_display
 
 # RESTORED: Overview calculation logic
@@ -114,7 +108,7 @@ y_s = df_full[df_full.index >= "2025-01-01"]['Close'].iloc[0]
 y_c = ((price - y_s) / y_s) * 100
 vol_calc = np.log(df_full['Close'] / df_full['Close'].shift(1)).std() * np.sqrt(252) * 100
 
-# --- 1. MARKET OVERVIEW (FULL RESTORE) ---
+# --- 1. MARKET OVERVIEW ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Current Price", f"${price:,.2f}", f"{w_c:+.2f}%")
@@ -128,7 +122,6 @@ st.divider()
 col_charts, col_signals = st.columns([0.72, 0.28])
 
 with col_charts:
-    # WINDOW 1: MARKET TREND (Price + MAs + BBs)
     st.markdown('<div class="window-header">MARKET TREND & INDICATORS HISTORY</div>', unsafe_allow_html=True)
     fig1 = go.Figure()
     fig1.add_trace(
@@ -141,68 +134,62 @@ with col_charts:
     fig1.add_trace(go.Scatter(x=data.index, y=data['BB_L'], name="BB Lower",
                               line=dict(color='rgba(173, 216, 230, 0.5)', dash='dash'), fill='tonexty',
                               fillcolor='rgba(173, 216, 230, 0.05)'))
-    fig1.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False, margin=dict(t=10, b=10))
+    fig1.update_layout(template="plotly_dark", height=450, xaxis_rangeslider_visible=False, margin=dict(t=10, b=10))
     st.plotly_chart(fig1, use_container_width=True)
 
-    # WINDOW 2: VOLUME
     st.markdown('<div class="window-header">TRADING VOLUME HISTORY</div>', unsafe_allow_html=True)
     v_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
-    fig2 = go.Figure(go.Bar(x=data.index, y=data['Volume'], marker_color=v_colors, name="Volume"))
-    fig2.update_layout(template="plotly_dark", height=250, margin=dict(t=10, b=10))
+    fig2 = go.Figure(go.Bar(x=data.index, y=data['Volume'], marker_color=v_colors))
+    fig2.update_layout(template="plotly_dark", height=200, margin=dict(t=10, b=10))
     st.plotly_chart(fig2, use_container_width=True)
 
-    # WINDOW 3: RSI
     st.markdown('<div class="window-header">RELATIVE STRENGTH (RSI) HISTORY</div>', unsafe_allow_html=True)
-    fig3 = go.Figure()
-    fig3.add_trace(go.Scatter(x=data.index, y=data['RSI'], name="RSI", line=dict(color='#BB86FC', width=2)))
+    fig3 = go.Figure(go.Scatter(x=data.index, y=data['RSI'], line=dict(color='#BB86FC', width=2)))
     fig3.add_hline(y=70, line_dash="dash", line_color="#FF3131")
     fig3.add_hline(y=30, line_dash="dash", line_color="#00FF41")
-    fig3.update_layout(template="plotly_dark", height=250, yaxis=dict(range=[0, 100]), margin=dict(t=10, b=10))
+    fig3.update_layout(template="plotly_dark", height=200, yaxis=dict(range=[0, 100]), margin=dict(t=10, b=10))
     st.plotly_chart(fig3, use_container_width=True)
 
-    # WINDOW 4: MACD
     st.markdown('<div class="window-header">MACD MOMENTUM HISTORY</div>', unsafe_allow_html=True)
     fig4 = go.Figure()
-    fig4.add_trace(go.Scatter(x=data.index, y=data['MACD'], name="MACD", line=dict(color='#00E5FF', width=2)))
-    fig4.add_trace(
-        go.Scatter(x=data.index, y=data['MACD_Signal'], name="Signal", line=dict(color='#FFCA28', width=1.5)))
-    h_colors = ['#26a69a' if val >= 0 else '#ef5350' for val in data['MACD_Hist']]
-    fig4.add_trace(go.Bar(x=data.index, y=data['MACD_Hist'], name="Histogram", marker_color=h_colors))
-    fig4.update_layout(template="plotly_dark", height=300, margin=dict(t=10, b=10))
+    fig4.add_trace(go.Scatter(x=data.index, y=data['MACD'], line=dict(color='#00E5FF', width=2)))
+    fig4.add_trace(go.Scatter(x=data.index, y=data['MACD_Signal'], line=dict(color='#FFCA28', width=1.5)))
+    fig4.add_trace(go.Bar(x=data.index, y=data['MACD_Hist'],
+                          marker_color=['#26a69a' if val >= 0 else '#ef5350' for val in data['MACD_Hist']]))
+    fig4.update_layout(template="plotly_dark", height=250, margin=dict(t=10, b=10))
     st.plotly_chart(fig4, use_container_width=True)
 
-    # --- NEW: MARKET NEWS SECTION ---
+    # --- MARKET NEWS (KEYERROR FIX APPLIED) ---
     st.markdown('<div class="window-header">📰 LATEST MARKET HEADLINES</div>', unsafe_allow_html=True)
-    if gold_news:
-        for article in gold_news[:8]:
-            st.markdown(f'<a href="{article["link"]}" target="_blank" class="news-link">● {article["title"]}</a>', unsafe_allow_html=True)
+    if raw_news:
+        for article in raw_news[:10]:
+            title = article.get("title")
+            link = article.get("link")
+            if title and link:
+                st.markdown(f'<a href="{link}" target="_blank" class="news-link">● {title}</a>', unsafe_allow_html=True)
     else:
-        st.write("No live news available at this moment.")
+        st.info("No live news headlines found.")
 
 with col_signals:
-    st.markdown('<div class="sidebar-header">📡 TRADING SIGNALS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-header">📡 SIGNALS</div>', unsafe_allow_html=True)
     latest = data.iloc[-1]
 
+
     def display_signal(label, value, status, color):
-        st.markdown(f"""
-            <div class="signal-container">
-                <div style='color:white; font-size:16px; font-weight:bold; margin-bottom:5px;'>{label}</div>
+        st.markdown(
+            f"""<div class="signal-container"><div style='color:white; font-size:16px; font-weight:bold;'>{label}</div>
                 <div style='display:flex; justify-content:space-between; align-items:center;'>
-                    <span style='color:white; font-size:26px; font-weight:bold;'>{value}</span>
-                    <span style='background-color:{color}; color:black; padding:2px 10px; border-radius:5px; font-weight:bold; font-size:12px;'>{status}</span>
-                </div>
-            </div>""", unsafe_allow_html=True)
+                <span style='color:white; font-size:26px; font-weight:bold;'>{value}</span>
+                <span style='background-color:{color}; color:black; padding:2px 10px; border-radius:5px; font-weight:bold;'>{status}</span>
+                </div></div>""", unsafe_allow_html=True)
 
-    # Signal Logic
-    rsi_val = latest['RSI']
-    rsi_stat = "STRONG SELL" if rsi_val > 70 else ("STRONG BUY" if rsi_val < 30 else "NEUTRAL")
-    rsi_col = "#FF3131" if rsi_val > 70 else ("#00FF41" if rsi_val < 30 else "#808495")
 
-    macd_val = latest['MACD']
-    macd_stat = "STRONG BUY" if macd_val > latest['MACD_Signal'] else "STRONG SELL"
-    macd_col = "#00FF41" if macd_val > latest['MACD_Signal'] else "#FF3131"
-
-    display_signal("RSI (14)", f"{rsi_val:.1f}", rsi_stat, rsi_col)
-    display_signal("MACD", f"{macd_val:.2f}", macd_stat, macd_col)
-    display_signal("STOCH (%K)", f"{latest['STOCH_K']:.1f}%", "ACTIVE", "#FFA500")
-    display_signal("TREND STRENGTH", "BULLISH" if latest['Close'] > latest['MA20'] else "BEARISH", "LIVE", "#00FF41")
+    rsi_v = latest['RSI']
+    rsi_s = "STRONG SELL" if rsi_v > 70 else ("STRONG BUY" if rsi_v < 30 else "NEUTRAL")
+    display_signal("RSI (14)", f"{rsi_v:.1f}", rsi_s,
+                   "#FF3131" if rsi_v > 70 else ("#00FF41" if rsi_v < 30 else "#808495"))
+    display_signal("MACD", f"{latest['MACD']:.2f}",
+                   "STRONG BUY" if latest['MACD'] > latest['MACD_Signal'] else "STRONG SELL",
+                   "#00FF41" if latest['MACD'] > latest['MACD_Signal'] else "#FF3131")
+    display_signal("STOCH %K", f"{latest['STOCH_K']:.1f}%", "ACTIVE", "#FFA500")
+    display_signal("TREND", "BULLISH" if latest['Close'] > latest['MA20'] else "BEARISH", "LIVE", "#00FF41")
