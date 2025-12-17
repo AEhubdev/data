@@ -57,15 +57,23 @@ def get_advanced_data():
 
 data, price, week_c, month_c, ytd_c, vol = get_advanced_data()
 
-# --- 1. MARKET OVERVIEW (With Dynamic Colors) ---
+# --- 1. MARKET OVERVIEW (With Dynamic Value Colors) ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
 
-# Streamlit st.metric automatically colors green/red based on the '+' or '-' sign
+# Logic to choose color for values
+# We use :color[text] syntax supported by Streamlit Markdown
+w_color = "green" if week_c > 0 else "red"
+m_color = "green" if month_c > 0 else "red"
+y_color = "green" if ytd_c > 0 else "red"
+
+# Update each metric to use the calculated color for the main value
 c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
-c2.metric("Weekly Change", f"{week_c:+.2f}%", delta_color="normal")
-c3.metric("Monthly Change", f"{month_c:+.2f}%", delta_color="normal")
-c4.metric("YTD Change", f"{ytd_c:+.2f}%", delta_color="normal")
+
+# We wrap the value in :color[] to apply the color to the main number
+c2.metric("Weekly Change", f":{w_color}[{week_c:+.2f}%]", delta_color="normal")
+c3.metric("Monthly Change", f":{m_color}[{month_c:+.2f}%]", delta_color="normal")
+c4.metric("YTD Change", f":{y_color}[{ytd_c:+.2f}%]", delta_color="normal")
 c5.metric("Volatility", f"{vol:.2f}%", "Annualized")
 
 st.divider()
