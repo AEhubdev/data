@@ -39,7 +39,6 @@ def colored_metric(col, label, val_text, delta_val, is_vol=False):
     col.markdown(f"**{label}**")
     col.markdown(f"<h2 style='color:{color}; margin-top:-15px; font-weight:bold;'>{val_text}</h2>",
                  unsafe_allow_html=True)
-    if is_vol: col.caption("Annualized Risk")
 
 
 @st.cache_data(ttl=60)
@@ -74,7 +73,7 @@ def get_data():
 data_display, price, df_full = get_data()
 data = data_display
 
-# --- 1. MARKET OVERVIEW ---
+# --- 1. MARKET OVERVIEW (Restored) ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
 
@@ -98,17 +97,19 @@ with col_charts:
     fig = make_subplots(
         rows=4, cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.1,  # Increased spacing to prevent overlap
+        vertical_spacing=0.12,  # Significant gap to prevent title overlap
         row_heights=[0.4, 0.15, 0.2, 0.25],
         subplot_titles=("MARKET TREND & INDICATORS", "TRADING VOLUME", "RELATIVE STRENGTH INDEX (RSI)", "MACD MOMENTUM")
     )
 
-    # 1. Price
+    # 1. Price + MAs
     fig.add_trace(
         go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
                        name="Price"), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name="MA 20", line=dict(color='#FFEB3B')), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name="MA 50", line=dict(color='#E91E63')), row=1, col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name="MA 20", line=dict(color='#FFEB3B', width=1.5)), row=1,
+                  col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name="MA 50", line=dict(color='#E91E63', width=1.5)), row=1,
+                  col=1)
     fig.add_trace(go.Scatter(x=data.index, y=data['BB_U'], name="BB Upper",
                              line=dict(color='rgba(173, 216, 230, 0.4)', dash='dash')), row=1, col=1)
     fig.add_trace(go.Scatter(x=data.index, y=data['BB_L'], name="BB Lower",
@@ -133,16 +134,17 @@ with col_charts:
     h_colors = ['#26a69a' if val >= 0 else '#ef5350' for val in data['MACD_Hist']]
     fig.add_trace(go.Bar(x=data.index, y=data['MACD_Hist'], name="Histogram", marker_color=h_colors), row=4, col=1)
 
-    # HEADER POSITIONING FIX (Pushed further away from chart lines)
+    # --- POSITION HEADERS CLEARLY ABOVE ---
     fig.update_annotations(font=dict(size=22, color="white", family="Arial Black"))
-    fig.layout.annotations[0].update(y=1.05)  # Market Trend
-    fig.layout.annotations[1].update(y=0.58)  # Volume
-    fig.layout.annotations[2].update(y=0.40)  # RSI
-    fig.layout.annotations[3].update(y=0.18)  # MACD
+    # The y coordinates are in 'paper' coordinates (0.0 to 1.0)
+    fig.layout.annotations[0].update(y=1.05)  # Header for Row 1
+    fig.layout.annotations[1].update(y=0.58)  # Header for Row 2
+    fig.layout.annotations[2].update(y=0.40)  # Header for Row 3
+    fig.layout.annotations[3].update(y=0.18)  # Header for Row 4
 
     fig.update_layout(
         template="plotly_dark", xaxis_rangeslider_visible=False, height=1400, showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5),  # Legend moved up
+        legend=dict(orientation="h", yanchor="bottom", y=1.07, xanchor="center", x=0.5),  # Moved legend above top title
         margin=dict(t=150, b=40, l=40, r=40)
     )
 
@@ -166,8 +168,7 @@ with col_signals:
             </div>""", unsafe_allow_html=True)
 
 
-    # --- ADVANCED SIGNAL LOGIC ---
-    # RSI Logic
+    # RSI Signal logic
     rsi_val = latest['RSI']
     if rsi_val <= 30:
         rsi_stat, rsi_col = "STRONG BUY", "#00FF41"
@@ -176,16 +177,15 @@ with col_signals:
     else:
         rsi_stat, rsi_col = "NEUTRAL", "#808495"
 
-    # MACD Logic (Signal Crossover)
+    # MACD Signal logic
     macd_val = latest['MACD']
     sig_val = latest['MACD_Signal']
-    hist_val = latest['MACD_Hist']
-    if macd_val > sig_val and hist_val > 0:
+    if macd_val > sig_val and latest['MACD_Hist'] > 0:
         macd_stat, macd_col = "STRONG BUY", "#00FF41"
-    elif macd_val < sig_val and hist_val < 0:
+    elif macd_val < sig_val and latest['MACD_Hist'] < 0:
         macd_stat, macd_col = "STRONG SELL", "#FF3131"
     else:
-        macd_stat, macd_col = "HOLD", "#FFA500"
+        macd_stat, macd_col = "NEUTRAL", "#808495"
 
     display_signal("RSI (14)", f"{rsi_val:.1f}", rsi_stat, rsi_col)
     display_signal("MACD", f"{macd_val:.2f}", macd_stat, macd_col)
