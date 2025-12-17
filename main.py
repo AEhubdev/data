@@ -47,7 +47,7 @@ def get_data():
     df['BB_U'] = df['MA20'] + (std * 2)
     df['BB_L'] = df['MA20'] - (std * 2)
 
-    # RSI & MACD Logic
+    # RSI, MACD, Stoch
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -59,20 +59,20 @@ def get_data():
     df['STOCH_K'] = (df['Close'] - df['Low'].rolling(14).min()) * 100 / (
                 df['High'].rolling(14).max() - df['Low'].rolling(14).min())
 
-    # Performance Calculation
+    # Performance
     curr = float(df['Close'].iloc[-1])
-    week_c = ((curr - float(df['Close'].iloc[-5])) / float(df['Close'].iloc[-5])) * 100
-    month_c = ((curr - float(df['Close'].iloc[-21])) / float(df['Close'].iloc[-21])) * 100
+    w_c = ((curr - float(df['Close'].iloc[-5])) / float(df['Close'].iloc[-5])) * 100
+    m_c = ((curr - float(df['Close'].iloc[-21])) / float(df['Close'].iloc[-21])) * 100
     y_s = df[df.index >= "2025-01-01"]['Close'].iloc[0]
     y_c = ((curr - y_s) / y_s) * 100
     vol_calc = np.log(df['Close'] / df['Close'].shift(1)).std() * np.sqrt(252) * 100
 
-    return df[df.index >= "2025-01-01"], curr, week_c, month_c, y_c, vol_calc
+    return df[df.index >= "2025-01-01"], curr, w_c, m_c, y_c, vol_calc
 
 
 data, price, week_c, month_c, ytd_c, vol = get_data()
 
-# --- MARKET OVERVIEW ---
+# --- 1. MARKET OVERVIEW ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
@@ -82,20 +82,19 @@ colored_metric(c4, "YTD Change", f"{ytd_c:+.2f}%", ytd_c)
 colored_metric(c5, "Volatility", f"{vol:.2f}%", vol, is_vol=True)
 st.divider()
 
-# --- CHART SECTION ---
+# --- 2. CHART SECTION ---
 col_charts, col_signals = st.columns([0.72, 0.28])
 
 with col_charts:
-    # 1. Create subplots with better spacing
     fig = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.12,  # More room for big headers
+        vertical_spacing=0.15,
         row_heights=[0.7, 0.3],
         subplot_titles=("MARKET TREND & INDICATORS", "TRADING VOLUME")
     )
 
-    # 2. Add Price & Overlays
+    # Price & Indicators
     fig.add_trace(
         go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
                        name="Price"), row=1, col=1)
@@ -109,24 +108,32 @@ with col_charts:
                              line=dict(color='rgba(173, 216, 230, 0.5)', dash='dash'), fill='tonexty',
                              fillcolor='rgba(173, 216, 230, 0.05)'), row=1, col=1)
 
-    # 3. Add Volume
-    colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
-    fig.add_trace(go.Bar(x=data.index, y=data['Volume'], marker_color=colors, name="Volume", opacity=0.8), row=2, col=1)
-    fig.update_yaxes(range=[0, data['Volume'].max() * 2.2], row=2, col=1)
+    # Volume
+    v_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
+    fig.add_trace(go.Bar(x=data.index, y=data['Volume'], marker_color=v_colors, name="Volume", opacity=0.8), row=2,
+                  col=1)
+    fig.update_yaxes(range=[0, data['Volume'].max() * 2.5], row=2, col=1)
 
-    # 4. 🔥 STYLING HEADERS (THE ANNOTATIONS)
-    fig.update_annotations(font=dict(size=22, color="white", family="Arial Black"))
-    # Shift labels slightly higher to avoid overlap
-    fig.layout.annotations[0].update(y=1.02, x=0, xanchor='left')  # Trend Header
-    fig.layout.annotations[1].update(y=0.28, x=0, xanchor='left', font=dict(color="#808495"))  # Volume Header
+    # --- STYLE UPDATES ---
+    # 1. Center & Color Headers White
+    fig.update_annotations(font=dict(size=24, color="white", family="Arial Black"))
+    fig.layout.annotations[0].update(x=0.5, xanchor='center', y=1.08)  # Market Trend Title
+    fig.layout.annotations[1].update(x=0.5, xanchor='center', y=0.28)  # Volume Title
 
+    # 2. Position Legend Below Main Header
     fig.update_layout(
         template="plotly_dark",
         xaxis_rangeslider_visible=False,
-        height=850,
+        height=900,
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
-        margin=dict(t=80, b=20, l=20, r=20)
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=1.04,  # Positioned just below the centered white title
+            xanchor="center",
+            x=0.5
+        ),
+        margin=dict(t=120, b=40, l=40, r=40)  # Extra top margin for the high header/legend
     )
 
     y_min, y_max = data['Low'].min() * 0.99, data['High'].max() * 1.01
