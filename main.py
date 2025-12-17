@@ -69,35 +69,48 @@ colored_metric(c5, "Volatility", f"{vol:.2f}%", vol, is_vol=True)
 
 st.divider()
 
-# --- 2. CHART SECTION ---
-fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.7, 0.3])
+# --- 2. CHART SECTION (ADJUSTED VOLUME SCALE) ---
+# 1. Rebalance row heights: 80% for Price, 20% for Volume
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                     vertical_spacing=0.03,
+                     row_heights=[0.8, 0.2])
 
 # PRICE & INDICATORS (Row 1)
-fig.add_trace(go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
+fig.add_trace(go.Candlestick(x=data.index, open=data['Open'], high=data['High'],
+                             low=data['Low'], close=data['Close'],
                              name="Gold Price"), row=1, col=1)
 
-# Moving Averages
-fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name="MA20", line=dict(color='#FFEB3B', width=1.5)), row=1, col=1)
-fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name="MA50", line=dict(color='#E91E63', width=1.5)), row=1, col=1)
+fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name="MA20",
+                         line=dict(color='#FFEB3B', width=1.2)), row=1, col=1)
+fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name="MA50",
+                         line=dict(color='#E91E63', width=1.2)), row=1, col=1)
 
-# Bollinger Bands
 fig.add_trace(go.Scatter(x=data.index, y=data['BB_U'], name="BB Upper",
-                         line=dict(color='rgba(173, 216, 230, 0.4)', width=1, dash='dash')), row=1, col=1)
+                         line=dict(color='rgba(173, 216, 230, 0.3)', width=1, dash='dash')), row=1, col=1)
 fig.add_trace(go.Scatter(x=data.index, y=data['BB_L'], name="BB Lower",
-                         line=dict(color='rgba(173, 216, 230, 0.4)', width=1, dash='dash'),
-                         fill='tonexty', fillcolor='rgba(173, 216, 230, 0.05)'), row=1, col=1)
+                         line=dict(color='rgba(173, 216, 230, 0.3)', width=1, dash='dash'),
+                         fill='tonexty', fillcolor='rgba(173, 216, 230, 0.03)'), row=1, col=1)
 
-# VOLUME (Row 2)
+# VOLUME (Row 2) - Adjusted with lower opacity for a cleaner look
 v_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
-fig.add_trace(go.Bar(x=data.index, y=data['Volume'], marker_color=v_colors, name="Volume"), row=2, col=1)
+fig.add_trace(go.Bar(x=data.index, y=data['Volume'],
+                     marker_color=v_colors,
+                     marker_line_width=0, # Remove bar borders to reduce "noise"
+                     opacity=0.6,        # Make bars slightly transparent
+                     name="Volume"), row=2, col=1)
 
 # Styling
 fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=800,
                   showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
 
-# Set a nice range for Y-axis based on price action
-y_min = data['Low'].min() * 0.98
-y_max = data['High'].max() * 1.02
+# --- AXIS SCALE OPTIMIZATION ---
+# Price Axis: Standard buffer
+y_min, y_max = data['Low'].min() * 0.99, data['High'].max() * 1.01
 fig.update_yaxes(range=[y_min, y_max], row=1, col=1)
+
+# Volume Axis Fix: Set the top of the scale to 4x the max volume
+# This ensures the bars only fill the bottom ~25% of their row.
+vol_max = data['Volume'].max()
+fig.update_yaxes(range=[0, vol_max * 4], showticklabels=False, row=2, col=1)
 
 st.plotly_chart(fig, use_container_width=True)
