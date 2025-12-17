@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Gold Terminal Elite", layout="wide")
 
-# ORIGINAL CSS (Restored 100%)
+# ORIGINAL CSS (Restored 100% with color fix)
 st.markdown("""
     <style>
     .main { background-color: #0E1117; }
@@ -42,17 +42,21 @@ st.markdown("""
         border-bottom: 1px solid #363A45;
     }
 
-    /* Small addition for news links to look good in your UI */
+    /* UPDATED: News headlines are now white */
     .news-link {
-        color: #FFD700 !important;
+        color: #FFFFFF !important;
         text-decoration: none !important;
         display: block;
         padding: 8px;
         border-radius: 5px;
-        border: 1px solid #363A45;
+        border-bottom: 1px solid #363A45;
         margin-bottom: 5px;
+        font-size: 15px;
     }
-    .news-link:hover { background-color: #1E222D; }
+    .news-link:hover { 
+        background-color: #1E222D;
+        color: #FFD700 !important; /* Gold on hover for contrast */
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -72,14 +76,14 @@ def get_data():
     df = yf.download(ticker, start="2024-09-01")
     if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-    # RE-ADDED: Reliable News Fetch
+    # Reliable News Fetch using yf.Search
     try:
         search = yf.Search("Gold Market", news_count=8)
         news_data = search.news
     except:
         news_data = []
 
-    # ORIGINAL: Technical Indicators (Restored)
+    # ORIGINAL Indicators
     df['MA20'] = df['Close'].rolling(window=20).mean()
     df['MA50'] = df['Close'].rolling(window=50).mean()
     std = df['Close'].rolling(window=20).std()
@@ -103,14 +107,14 @@ def get_data():
 data_display, price, df_full, news_list = get_data()
 data = data_display
 
-# ORIGINAL Overview Calculations
+# Calculations
 w_c = ((price - float(df_full['Close'].iloc[-5])) / float(df_full['Close'].iloc[-5])) * 100
 m_c = ((price - float(df_full['Close'].iloc[-21])) / float(df_full['Close'].iloc[-21])) * 100
 y_s = df_full[df_full.index >= "2025-01-01"]['Close'].iloc[0]
 y_c = ((price - y_s) / y_s) * 100
 vol_calc = np.log(df_full['Close'] / df_full['Close'].shift(1)).std() * np.sqrt(252) * 100
 
-# --- 1. MARKET OVERVIEW ---
+# --- 1. OVERVIEW ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Current Price", f"${price:,.2f}", f"{w_c:+.2f}%")
@@ -120,11 +124,11 @@ colored_metric(c4, "YTD Change", f"{y_c:+.2f}%", y_c)
 colored_metric(c5, "Volatility", f"{vol_calc:.2f}%", vol_calc, is_vol=True)
 st.divider()
 
-# --- 2. MULTI-WINDOW CHART SECTION ---
+# --- 2. MULTI-WINDOW CHARTS ---
 col_charts, col_signals = st.columns([0.72, 0.28])
 
 with col_charts:
-    # WINDOW 1: MARKET TREND (Price + MAs + BBs)
+    # Trend Chart
     st.markdown('<div class="window-header">MARKET TREND & INDICATORS HISTORY</div>', unsafe_allow_html=True)
     fig1 = go.Figure()
     fig1.add_trace(
@@ -140,14 +144,14 @@ with col_charts:
     fig1.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False, margin=dict(t=10, b=10))
     st.plotly_chart(fig1, use_container_width=True)
 
-    # WINDOW 2: VOLUME (Restored)
+    # Volume Chart
     st.markdown('<div class="window-header">TRADING VOLUME HISTORY</div>', unsafe_allow_html=True)
     v_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
     fig2 = go.Figure(go.Bar(x=data.index, y=data['Volume'], marker_color=v_colors, name="Volume"))
     fig2.update_layout(template="plotly_dark", height=250, margin=dict(t=10, b=10))
     st.plotly_chart(fig2, use_container_width=True)
 
-    # WINDOW 3: RSI (Restored)
+    # RSI Chart
     st.markdown('<div class="window-header">RELATIVE STRENGTH (RSI) HISTORY</div>', unsafe_allow_html=True)
     fig3 = go.Figure()
     fig3.add_trace(go.Scatter(x=data.index, y=data['RSI'], name="RSI", line=dict(color='#BB86FC', width=2)))
@@ -156,7 +160,7 @@ with col_charts:
     fig3.update_layout(template="plotly_dark", height=250, yaxis=dict(range=[0, 100]), margin=dict(t=10, b=10))
     st.plotly_chart(fig3, use_container_width=True)
 
-    # WINDOW 4: MACD (Restored)
+    # MACD Chart
     st.markdown('<div class="window-header">MACD MOMENTUM HISTORY</div>', unsafe_allow_html=True)
     fig4 = go.Figure()
     fig4.add_trace(go.Scatter(x=data.index, y=data['MACD'], name="MACD", line=dict(color='#00E5FF', width=2)))
@@ -167,7 +171,7 @@ with col_charts:
     fig4.update_layout(template="plotly_dark", height=300, margin=dict(t=10, b=10))
     st.plotly_chart(fig4, use_container_width=True)
 
-    # RE-ADDED: MARKET NEWS (The working version)
+    # NEWS SECTION (Working search logic)
     st.markdown('<div class="window-header">📰 LATEST MARKET HEADLINES</div>', unsafe_allow_html=True)
     if news_list:
         for article in news_list:
@@ -175,7 +179,7 @@ with col_charts:
                         unsafe_allow_html=True)
 
 with col_signals:
-    # ORIGINAL: Signals Column (Restored)
+    # Sidebar Signals
     st.markdown('<div class="sidebar-header">📡 TRADING SIGNALS</div>', unsafe_allow_html=True)
     latest = data.iloc[-1]
 
