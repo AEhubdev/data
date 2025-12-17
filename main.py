@@ -19,20 +19,22 @@ st.markdown("""
 
 # HELPER: Custom metric with HTML to bypass Streamlit's markdown bugs
 def colored_metric(col, label, val_text, delta_val, is_vol=False):
-    # Volatility is usually neutral (white/gray) or warning (orange)
+    # 1. Determine the color
     if is_vol:
         color = "#FFA500"  # Orange for risk
     else:
         color = "#00FF41" if delta_val > 0 else "#FF3131"  # Neon Green/Red
 
+    # 2. Render the Label
     col.markdown(f"**{label}**")
-    col.markdown(f"<h2 style='color:{color}; margin-top:-15px;'>{val_text}</h2>", unsafe_allow_html=True)
 
-    if not is_vol:
-        arrow = "▲" if delta_val > 0 else "▼"
-        col.markdown(f"<p style='color:{color}; font-size:14px; margin-top:-10px;'>{arrow} {abs(delta_val):.2f}%</p>",
-                     unsafe_allow_html=True)
-    else:
+    # 3. Render the Main Value (Big Number) only
+    # Removed the delta <p> tag that was creating the '▲ 64.47%' text
+    col.markdown(f"<h2 style='color:{color}; margin-top:-15px; font-weight:bold;'>{val_text}</h2>",
+                 unsafe_allow_html=True)
+
+    # 4. Show caption for volatility only
+    if is_vol:
         col.caption("Annualized Risk")
 
 
