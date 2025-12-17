@@ -8,6 +8,7 @@ from plotly.subplots import make_subplots
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Gold Terminal Elite", layout="wide")
 
+# CSS to fix metric styles
 st.markdown("""
     <style>
     .main { background-color: #0E1117; }
@@ -16,19 +17,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# HELPER: Custom metric with HTML to bypass Streamlit's markdown bugs
-def colored_metric(col, label, val_text, delta_val, is_vol=False):
-    if is_vol:
-        color = "#FFA500"  # Orange for risk
-    else:
-        color = "#00FF41" if delta_val > 0 else "#FF3131"  # Neon Green/Red
 
+# HELPER: Custom metric with HTML
+def colored_metric(col, label, val_text, delta_val, is_vol=False):
+    color = "#FFA500" if is_vol else ("#00FF41" if delta_val > 0 else "#FF3131")
     col.markdown(f"**{label}**")
     col.markdown(f"<h2 style='color:{color}; margin-top:-15px; font-weight:bold;'>{val_text}</h2>",
                  unsafe_allow_html=True)
+    if is_vol: col.caption("Annualized Risk")
 
-    if is_vol:
-        col.caption("Annualized Risk")
 
 @st.cache_data(ttl=60)
 def get_data():
@@ -43,24 +40,25 @@ def get_data():
     df['BB_U'] = df['MA20'] + (std * 2)
     df['BB_L'] = df['MA20'] - (std * 2)
 
-    # Metrics
+    # Performance Metrics
     curr = float(df['Close'].iloc[-1])
     w_c = ((curr - float(df['Close'].iloc[-5])) / float(df['Close'].iloc[-5])) * 100
     m_c = ((curr - float(df['Close'].iloc[-21])) / float(df['Close'].iloc[-21])) * 100
     y_s = df[df.index >= "2025-01-01"]['Close'].iloc[0]
     y_c = ((curr - y_s) / y_s) * 100
 
+    # Correct Volatility
     log_returns = np.log(df['Close'] / df['Close'].shift(1))
     vol_calc = log_returns.std() * np.sqrt(252) * 100
 
     return df[df.index >= "2025-01-01"], curr, w_c, m_c, y_c, vol_calc
+
 
 data, price, week_c, month_c, ytd_c, vol = get_data()
 
 # --- 1. MARKET OVERVIEW ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
-
 c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
 colored_metric(c2, "Weekly Change", f"{week_c:+.2f}%", week_c)
 colored_metric(c3, "Monthly Change", f"{month_c:+.2f}%", month_c)
@@ -69,48 +67,55 @@ colored_metric(c5, "Volatility", f"{vol:.2f}%", vol, is_vol=True)
 
 st.divider()
 
-# --- 2. CHART SECTION (ADJUSTED VOLUME SCALE) ---
-# 1. Rebalance row heights: 80% for Price, 20% for Volume
-fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                     vertical_spacing=0.03,
-                     row_heights=[0.8, 0.2])
+# --- 2. CHART SECTION WITH ADJUSTED VOLUME ---
+# subplot_titles adds the headers for both sections
+fig = make_subplots(
+    rows=2, cols=1,
+    shared_xaxes=True,
+    vertical_spacing=0.07,
+    row_heights=[0.75, 0.25],
+    subplot_titles=("Price Action & Indicators", "Market Volume")
+)
 
-# PRICE & INDICATORS (Row 1)
-fig.add_trace(go.Candlestick(x=data.index, open=data['Open'], high=data['High'],
-                             low=data['Low'], close=data['Close'],
-                             name="Gold Price"), row=1, col=1)
+# Row 1: Candlestick & Overlays
+fig.add_trace(go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
+                             name="Price"), row=1, col=1)
+fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name="MA20", line=dict(color='#FFEB3B', width=1.5)), row=1,
+              col=1)
+fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name="MA50", line=dict(color='#E91E63', width=1.5)), row=1,
+              col=1)
+fig.add_trace(
+    go.Scatter(x=data.index, y=data['BB_U'], name="BB Upper", line=dict(color='rgba(173, 216, 230, 0.4)', dash='dash')),
+    row=1, col=1)
+fig.add_trace(
+    go.Scatter(x=data.index, y=data['BB_L'], name="BB Lower", line=dict(color='rgba(173, 216, 230, 0.4)', dash='dash'),
+               fill='tonexty', fillcolor='rgba(173, 216, 230, 0.05)'), row=1, col=1)
 
-fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name="MA20",
-                         line=dict(color='#FFEB3B', width=1.2)), row=1, col=1)
-fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name="MA50",
-                         line=dict(color='#E91E63', width=1.2)), row=1, col=1)
-
-fig.add_trace(go.Scatter(x=data.index, y=data['BB_U'], name="BB Upper",
-                         line=dict(color='rgba(173, 216, 230, 0.3)', width=1, dash='dash')), row=1, col=1)
-fig.add_trace(go.Scatter(x=data.index, y=data['BB_L'], name="BB Lower",
-                         line=dict(color='rgba(173, 216, 230, 0.3)', width=1, dash='dash'),
-                         fill='tonexty', fillcolor='rgba(173, 216, 230, 0.03)'), row=1, col=1)
-
-# VOLUME (Row 2) - Adjusted with lower opacity for a cleaner look
+# Row 2: Optimized Volume
 v_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
-fig.add_trace(go.Bar(x=data.index, y=data['Volume'],
-                     marker_color=v_colors,
-                     marker_line_width=0, # Remove bar borders to reduce "noise"
-                     opacity=0.6,        # Make bars slightly transparent
-                     name="Volume"), row=2, col=1)
+fig.add_trace(go.Bar(
+    x=data.index,
+    y=data['Volume'],
+    marker_color=v_colors,
+    name="Volume",
+    opacity=0.8
+), row=2, col=1)
 
-# Styling
-fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=800,
-                  showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+# ADJUST SCALE: Force volume bars to only take up bottom half of their subplot
+vol_max = data['Volume'].max()
+fig.update_yaxes(range=[0, vol_max * 2], row=2, col=1)  # "Squishes" the bars
 
-# --- AXIS SCALE OPTIMIZATION ---
-# Price Axis: Standard buffer
+# FINAL STYLING
+fig.update_layout(
+    template="plotly_dark",
+    xaxis_rangeslider_visible=False,
+    height=850,
+    showlegend=True,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+)
+
+# Set Price Y-Axis range
 y_min, y_max = data['Low'].min() * 0.99, data['High'].max() * 1.01
 fig.update_yaxes(range=[y_min, y_max], row=1, col=1)
-
-# Volume Axis Fix: Set the top of the scale to 4x the max volume
-# This ensures the bars only fill the bottom ~25% of their row.
-vol_max = data['Volume'].max()
-fig.update_yaxes(range=[0, vol_max * 4], showticklabels=False, row=2, col=1)
 
 st.plotly_chart(fig, use_container_width=True)
