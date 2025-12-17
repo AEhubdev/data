@@ -11,13 +11,14 @@ def get_gold_data():
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
+    # Reliable News Fetch
     try:
         search = yf.Search("Gold Market", news_count=8)
         news_data = search.news
     except:
         news_data = []
 
-    # Indicators
+    # All Indicators from original code
     df['MA20'] = df['Close'].rolling(window=20).mean()
     df['MA50'] = df['Close'].rolling(window=50).mean()
     std = df['Close'].rolling(window=20).std()
@@ -34,13 +35,14 @@ def get_gold_data():
     df['MACD'] = ema12 - ema26
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
+
     df['STOCH_K'] = (df['Close'] - df['Low'].rolling(14).min()) * 100 / (
             df['High'].rolling(14).max() - df['Low'].rolling(14).min())
 
     return df[df.index >= "2025-01-01"], float(df['Close'].iloc[-1]), df, news_data
 
 
-def get_overview_stats(price, df_full):
+def calculate_metrics(price, df_full):
     w_c = ((price - float(df_full['Close'].iloc[-5])) / float(df_full['Close'].iloc[-5])) * 100
     m_c = ((price - float(df_full['Close'].iloc[-21])) / float(df_full['Close'].iloc[-21])) * 100
     y_s = df_full[df_full.index >= "2025-01-01"]['Close'].iloc[0]
