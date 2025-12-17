@@ -68,7 +68,8 @@ c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
 colored_metric(c2, "Weekly Change", week_c, week_c)
 colored_metric(c3, "Monthly Change", month_c, month_c)
 colored_metric(c4, "YTD Change", ytd_c, ytd_c)
-c5.metric("Volatility", f"{vol:.2f}%", "Annualized")
+colored_metric(c5, "Volatility", f"{vol:.2f}%", "Annualized")
+
 
 st.divider()
 
