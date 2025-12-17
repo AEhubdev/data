@@ -73,9 +73,9 @@ c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Current Price", f"${price:,.2f}")
 
 # Others use our HTML fix
-colored_metric(c2, "Weekly Change", f"{week_c:+.2f}%", week_c)
-colored_metric(c3, "Monthly Change", f"{month_c:+.2f}%", month_c)
-colored_metric(c4, "YTD Change", f"{ytd_c:+.2f}%", ytd_c)
+colored_metric(c2, "Weekly Change", f"{week_c:+.2f}%")
+colored_metric(c3, "Monthly Change", f"{month_c:+.2f}%")
+colored_metric(c4, "YTD Change", f"{ytd_c:+.2f}%")
 
 # VOLATILITY ADJUSTMENT: Passing 'is_vol=True'
 colored_metric(c5, "Volatility", f"{vol:.2f}%", vol, is_vol=True)
