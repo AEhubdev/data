@@ -8,7 +8,7 @@ from plotly.subplots import make_subplots
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Gold Terminal Elite", layout="wide")
 
-# CSS for custom metrics and signal containers
+# CSS to fix metric styles
 st.markdown("""
     <style>
     .main { background-color: #0E1117; }
@@ -20,15 +20,6 @@ st.markdown("""
         border-radius: 8px;
         border: 1px solid #363A45;
         margin-bottom: 10px;
-    }
-    /* Custom Large White Header Style */
-    .custom-header {
-        color: white;
-        font-family: 'Arial Black', sans-serif;
-        font-size: 28px;
-        text-align: center;
-        margin-bottom: 20px;
-        text-transform: uppercase;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -49,7 +40,7 @@ def get_data():
     df = yf.download(ticker, start="2024-09-01")
     if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-    # Indicators
+    # Technical Indicators
     df['MA20'] = df['Close'].rolling(window=20).mean()
     df['MA50'] = df['Close'].rolling(window=50).mean()
     std = df['Close'].rolling(window=20).std()
@@ -68,16 +59,30 @@ def get_data():
     df['STOCH_K'] = (df['Close'] - df['Low'].rolling(14).min()) * 100 / (
                 df['High'].rolling(14).max() - df['Low'].rolling(14).min())
 
-    return df[df.index >= "2025-01-01"], float(df['Close'].iloc[-1])
+    # Performance
+    curr = float(df['Close'].iloc[-1])
+    w_c = ((curr - float(df['Close'].iloc[-5])) / float(df['Close'].iloc[-5])) * 100
+    m_c = ((curr - float(df['Close'].iloc[-21])) / float(df['Close'].iloc[-21])) * 100
+    y_s = df[df.index >= "2025-01-01"]['Close'].iloc[0]
+    y_c = ((curr - y_s) / y_s) * 100
+    vol_calc = np.log(df['Close'] / df['Close'].shift(1)).std() * np.sqrt(252) * 100
+
+    return df[df.index >= "2025-01-01"], curr, w_c, m_c, y_c, vol_calc
 
 
-data, price = get_data()
+data, price, week_c, month_c, ytd_c, vol = get_data()
 
 # --- 1. MARKET OVERVIEW ---
 st.title("🏆 Gold Market Overview")
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
+colored_metric(c2, "Weekly Change", f"{week_c:+.2f}%", week_c)
+colored_metric(c3, "Monthly Change", f"{month_c:+.2f}%", month_c)
+colored_metric(c4, "YTD Change", f"{ytd_c:+.2f}%", ytd_c)
+colored_metric(c5, "Volatility", f"{vol:.2f}%", vol, is_vol=True)
 st.divider()
 
-# --- 2. CHART & SIGNAL LAYOUT ---
+# --- 2. CHART SECTION ---
 col_charts, col_signals = st.columns([0.72, 0.28])
 
 with col_charts:
@@ -89,7 +94,7 @@ with col_charts:
         subplot_titles=("MARKET TREND & INDICATORS", "TRADING VOLUME")
     )
 
-    # Price Data
+    # Price & Indicators
     fig.add_trace(
         go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
                        name="Price"), row=1, col=1)
@@ -103,28 +108,41 @@ with col_charts:
                              line=dict(color='rgba(173, 216, 230, 0.5)', dash='dash'), fill='tonexty',
                              fillcolor='rgba(173, 216, 230, 0.05)'), row=1, col=1)
 
-    # Volume Data
+    # Volume
     v_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
     fig.add_trace(go.Bar(x=data.index, y=data['Volume'], marker_color=v_colors, name="Volume", opacity=0.8), row=2,
                   col=1)
+    fig.update_yaxes(range=[0, data['Volume'].max() * 2.5], row=2, col=1)
 
-    # Styling Chart Headers (Centered & White)
-    fig.update_annotations(font=dict(size=26, color="white", family="Arial Black"))
-    fig.layout.annotations[0].update(x=0.5, xanchor='center', y=1.08)
-    fig.layout.annotations[1].update(x=0.5, xanchor='center', y=0.28)
+    # --- STYLE UPDATES ---
+    # 1. Center & Color Headers White
+    fig.update_annotations(font=dict(size=24, color="white", family="Arial Black"))
+    fig.layout.annotations[0].update(x=0.5, xanchor='center', y=1.08)  # Market Trend Title
+    fig.layout.annotations[1].update(x=0.5, xanchor='center', y=0.28)  # Volume Title
 
+    # 2. Position Legend Below Main Header
     fig.update_layout(
-        template="plotly_dark", xaxis_rangeslider_visible=False, height=900,
+        template="plotly_dark",
+        xaxis_rangeslider_visible=False,
+        height=900,
         showlegend=True,
-        legend=dict(orientation="h", yanchor="top", y=1.04, xanchor="center", x=0.5),
-        margin=dict(t=120, b=40, l=40, r=40)
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=1.04,  # Positioned just below the centered white title
+            xanchor="center",
+            x=0.5
+        ),
+        margin=dict(t=120, b=40, l=40, r=40)  # Extra top margin for the high header/legend
     )
+
+    y_min, y_max = data['Low'].min() * 0.99, data['High'].max() * 1.01
+    fig.update_yaxes(range=[y_min, y_max], row=1, col=1)
+
     st.plotly_chart(fig, use_container_width=True)
 
 with col_signals:
-    # --- LARGE WHITE TRADING INDICATORS HEADER ---
-    st.markdown('<p class="custom-header">TRADING INDICATORS</p>', unsafe_allow_html=True)
-
+    st.subheader("📡 Key Trading Signals")
     latest = data.iloc[-1]
 
 
