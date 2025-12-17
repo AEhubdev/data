@@ -19,16 +19,17 @@ st.markdown("""
 @st.cache_data(ttl=60)
 def get_advanced_data():
     ticker = "GC=F"
-    # Fetch from late 2024 to ensure indicators are accurate for Jan 1st 2025
+    # Fetch from late 2024 to ensure 2025 indicators are accurate from Day 1
     df = yf.download(ticker, start="2024-11-01")
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
     # --- TECHNICAL INDICATORS ---
+    # Moving Averages
     df['MA20'] = df['Close'].rolling(window=20).mean()
     df['MA50'] = df['Close'].rolling(window=50).mean()
 
-    # Bollinger Bands
+    # Bollinger Bands (20-day, 2 Std Dev)
     std = df['Close'].rolling(window=20).std()
     df['BB_Upper'] = df['MA20'] + (std * 2)
     df['BB_Lower'] = df['MA20'] - (std * 2)
@@ -36,38 +37,36 @@ def get_advanced_data():
     # Performance Calculations
     current_p = float(df['Close'].iloc[-1])
 
-    # Weekly/Monthly Deltas
+    # Weekly & Monthly
     w_p = float(df['Close'].iloc[-5]);
     w_c = ((current_p - w_p) / w_p) * 100
     m_p = float(df['Close'].iloc[-21]);
     m_c = ((current_p - m_p) / m_p) * 100
 
     # YTD (Since Jan 1, 2025)
-    ytd_start_data = df[df.index >= "2025-01-01"]
-    ytd_start_price = float(ytd_start_data['Close'].iloc[0])
-    ytd_c = ((current_p - ytd_start_price) / ytd_start_price) * 100
+    ytd_start = df[df.index >= "2025-01-01"]['Close'].iloc[0]
+    ytd_c = ((current_p - ytd_start) / ytd_start) * 100
 
     # Volatility
     vol = df['Close'].pct_change().std() * np.sqrt(252) * 100
 
-    # Filter for Chart View
+    # Filter final view for the chart
     chart_df = df[df.index >= "2025-01-01"].copy()
     return chart_df, current_p, w_c, m_c, ytd_c, vol
 
 
 data, price, week_c, month_c, ytd_c, vol = get_advanced_data()
 
-# --- 1. MARKET OVERVIEW (Colors adjust automatically based on sign) ---
+# --- 1. MARKET OVERVIEW (With Dynamic Colors) ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
 
-# delta_color="normal" (default) turns green if value is positive, red if negative
-c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}% (7d)")
-c2.metric("Weekly Change", f"{week_c:+.2f}%", delta=week_c)
-c3.metric("Monthly Change", f"{month_c:+.2f}%", delta=month_c)
-c4.metric("YTD Change", f"{ytd_c:+.2f}%", delta=ytd_c)
-# For Volatility, we usually want to see the number; color is set to off as it's a risk metric
-c5.metric("Volatility", f"{vol:.2f}%", "Annualized", delta_color="off")
+# Streamlit st.metric automatically colors green/red based on the '+' or '-' sign
+c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
+c2.metric("Weekly Change", f"{week_c:+.2f}%", delta_color="normal")
+c3.metric("Monthly Change", f"{month_c:+.2f}%", delta_color="normal")
+c4.metric("YTD Change", f"{ytd_c:+.2f}%", delta_color="normal")
+c5.metric("Volatility", f"{vol:.2f}%", "Annualized")
 
 st.divider()
 
@@ -76,25 +75,30 @@ col_chart, col_pulse = st.columns([3, 1])
 
 with col_chart:
     chart_type = st.toggle("Switch to Line Chart", value=False)
+
     fig = go.Figure()
 
+    # Base Chart (Candlestick or Line)
     if chart_type:
-        fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name="Price", line=dict(color='#00D4FF')))
+        fig.add_trace(go.Scatter(x=data.index, y=data['Close'], name="Price", line=dict(color='#00D4FF', width=2)))
     else:
         fig.add_trace(go.Candlestick(x=data.index, open=data['Open'], high=data['High'],
                                      low=data['Low'], close=data['Close'], name="Market Bar"))
 
-    # Technical Lines
+    # ADDING THE LINES
     fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], name="MA 20", line=dict(color='#FFEB3B', width=1.5)))
     fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], name="MA 50", line=dict(color='#E91E63', width=1.5)))
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Upper'], name="BB Upper",
-                             line=dict(color='rgba(173,216,230,0.4)', dash='dash')))
-    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Lower'], name="BB Lower",
-                             line=dict(color='rgba(173,216,230,0.4)', dash='dash')))
 
-    # Nice View Scaling
+    # Bollinger Bands (Dash style for distinction)
+    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Upper'], name="BB Upper",
+                             line=dict(color='rgba(173, 216, 230, 0.4)', width=1, dash='dash')))
+    fig.add_trace(go.Scatter(x=data.index, y=data['BB_Lower'], name="BB Lower",
+                             line=dict(color='rgba(173, 216, 230, 0.4)', width=1, dash='dash'),
+                             fill='tonexty', fillcolor='rgba(173, 216, 230, 0.05)'))  # Shading between bands
+
+    # "Nice View" Scaling
     y_min, y_max = data['Low'].min(), data['High'].max()
-    padding = (y_max - y_min) * 0.15
+    padding = (y_max - y_min) * 0.1
     fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=600,
                       yaxis=dict(range=[y_min - padding, y_max + padding], gridcolor="#2D2D2D"))
 
@@ -102,13 +106,18 @@ with col_chart:
 
 with col_pulse:
     st.subheader("Technical Pulse")
+
+    # Sentiment Logic
     sent_color = "green" if ytd_c > 0 else "red"
-    st.info(f"Signal: **:{sent_color}[{'BULLISH' if ytd_c > 0 else 'BEARISH'}]**")
+    st.info(f"Sentiment: **:{sent_color}[{'BULLISH' if ytd_c > 0 else 'BEARISH'}]**")
+
+    # BB Signal Logic
+    if price > data['BB_Upper'].iloc[-1]:
+        st.warning("⚠️ Overbought (Above BB Upper)")
+    elif price < data['BB_Lower'].iloc[-1]:
+        st.success("💎 Oversold (Below BB Lower)")
 
     st.divider()
-    st.write("**Quick Info**")
+    st.write("**Price Anchors**")
     st.caption(f"YTD Open: ${float(data['Open'].iloc[0]):,.2f}")
-    if price > data['BB_Upper'].iloc[-1]:
-        st.warning("⚠️ Overbought")
-    elif price < data['BB_Lower'].iloc[-1]:
-        st.success("💎 Oversold")
+    st.caption(f"20-Day MA: ${float(data['MA20'].iloc[-1]):,.2f}")
