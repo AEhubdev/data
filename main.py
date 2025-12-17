@@ -58,23 +58,28 @@ def get_data():
     df['BB_U'] = df['MA20'] + (std * 2)
     df['BB_L'] = df['MA20'] - (std * 2)
 
-    # RSI, MACD, Stoch
+    # RSI
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     df['RSI'] = 100 - (100 / (1 + (gain / loss)))
+
+    # MACD
     ema12 = df['Close'].ewm(span=12, adjust=False).mean()
     ema26 = df['Close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = ema12 - ema26
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
+
+    # Stoch
     df['STOCH_K'] = (df['Close'] - df['Low'].rolling(14).min()) * 100 / (
-                df['High'].rolling(14).max() - df['Low'].rolling(14).min())
+            df['High'].rolling(14).max() - df['Low'].rolling(14).min())
 
     return df[df.index >= "2025-01-01"], float(df['Close'].iloc[-1]), df
 
 
 data_display, price, df_full = get_data()
-data = data_display  # For the chart section
+data = data_display
 
 # Calculate changes for metrics based on full dataframe
 w_c = ((price - float(df_full['Close'].iloc[-5])) / float(df_full['Close'].iloc[-5])) * 100
@@ -97,14 +102,16 @@ st.divider()
 col_charts, col_signals = st.columns([0.72, 0.28])
 
 with col_charts:
+    # UPDATED: 4 rows for Price, Vol, RSI, and MACD
     fig = make_subplots(
-        rows=2, cols=1,
+        rows=4, cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.15,
-        row_heights=[0.7, 0.3],
-        subplot_titles=("MARKET TREND & INDICATORS", "TRADING VOLUME")
+        vertical_spacing=0.06,
+        row_heights=[0.45, 0.15, 0.2, 0.2],
+        subplot_titles=("MARKET TREND & INDICATORS", "TRADING VOLUME", "RELATIVE STRENGTH INDEX (RSI)", "MACD MOMENTUM")
     )
 
+    # Row 1: Price & Indicators
     fig.add_trace(
         go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
                        name="Price"), row=1, col=1)
@@ -118,19 +125,40 @@ with col_charts:
                              line=dict(color='rgba(173, 216, 230, 0.5)', dash='dash'), fill='tonexty',
                              fillcolor='rgba(173, 216, 230, 0.05)'), row=1, col=1)
 
+    # Row 2: Volume
     v_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
     fig.add_trace(go.Bar(x=data.index, y=data['Volume'], marker_color=v_colors, name="Volume", opacity=0.8), row=2,
                   col=1)
-    fig.update_yaxes(range=[0, data['Volume'].max() * 2.5], row=2, col=1)
 
-    fig.update_annotations(font=dict(size=24, color="white", family="Arial Black"))
-    fig.layout.annotations[0].update(x=0.5, xanchor='center', y=1.08)
-    fig.layout.annotations[1].update(x=0.5, xanchor='center', y=0.28)
+    # Row 3: RSI
+    fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], name="RSI", line=dict(color='#BB86FC', width=2)), row=3,
+                  col=1)
+    fig.add_hline(y=70, line_dash="dash", line_color="#FF3131", line_width=1, row=3, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color="#00FF41", line_width=1, row=3, col=1)
+    fig.update_yaxes(range=[0, 100], row=3, col=1)
+
+    # Row 4: MACD
+    fig.add_trace(go.Scatter(x=data.index, y=data['MACD'], name="MACD", line=dict(color='#00E5FF', width=2)), row=4,
+                  col=1)
+    fig.add_trace(go.Scatter(x=data.index, y=data['MACD_Signal'], name="Signal", line=dict(color='#FFCA28', width=1.5)),
+                  row=4, col=1)
+    h_colors = ['#26a69a' if val >= 0 else '#ef5350' for val in data['MACD_Hist']]
+    fig.add_trace(go.Bar(x=data.index, y=data['MACD_Hist'], name="Histogram", marker_color=h_colors), row=4, col=1)
+
+    # Style and Centering
+    fig.update_annotations(font=dict(size=22, color="white", family="Arial Black"))
+    for i in range(len(fig.layout.annotations)):
+        fig.layout.annotations[i].update(x=0.5, xanchor='center')
+
+    # Adjusting title positions manually for the new rows
+    fig.layout.annotations[1].update(y=0.51)  # Volume
+    fig.layout.annotations[2].update(y=0.34)  # RSI
+    fig.layout.annotations[3].update(y=0.17)  # MACD
 
     fig.update_layout(
-        template="plotly_dark", xaxis_rangeslider_visible=False, height=900, showlegend=True,
-        legend=dict(orientation="h", yanchor="top", y=1.04, xanchor="center", x=0.5),
-        margin=dict(t=120, b=40, l=40, r=40)
+        template="plotly_dark", xaxis_rangeslider_visible=False, height=1300, showlegend=True,
+        legend=dict(orientation="h", yanchor="top", y=1.03, xanchor="center", x=0.5),
+        margin=dict(t=100, b=40, l=40, r=40)
     )
 
     y_min, y_max = data['Low'].min() * 0.99, data['High'].max() * 1.01
@@ -138,9 +166,7 @@ with col_charts:
     st.plotly_chart(fig, use_container_width=True)
 
 with col_signals:
-    # Bigger White Header for Sidebar
     st.markdown('<div class="sidebar-header">📡 TRADING SIGNALS</div>', unsafe_allow_html=True)
-
     latest = data.iloc[-1]
 
 
