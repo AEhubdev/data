@@ -8,18 +8,29 @@ from plotly.subplots import make_subplots
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Gold Terminal Elite", layout="wide")
 
-# CSS to fix metric styles
+# CSS to fix metric styles and larger sidebar headers
 st.markdown("""
     <style>
     .main { background-color: #0E1117; }
     [data-testid="stMetricLabel"] { color: #808495 !important; }
     [data-testid="stMetricValue"] { color: white !important; }
+
+    /* Bigger, White Sidebar Header */
+    .sidebar-header {
+        color: white !important;
+        font-size: 28px !important;
+        font-weight: bold !important;
+        font-family: 'Arial Black', sans-serif;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
     .signal-container {
         background-color: #1E222D;
-        padding: 15px;
-        border-radius: 8px;
+        padding: 20px;
+        border-radius: 10px;
         border: 1px solid #363A45;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -59,27 +70,27 @@ def get_data():
     df['STOCH_K'] = (df['Close'] - df['Low'].rolling(14).min()) * 100 / (
                 df['High'].rolling(14).max() - df['Low'].rolling(14).min())
 
-    # Performance
-    curr = float(df['Close'].iloc[-1])
-    w_c = ((curr - float(df['Close'].iloc[-5])) / float(df['Close'].iloc[-5])) * 100
-    m_c = ((curr - float(df['Close'].iloc[-21])) / float(df['Close'].iloc[-21])) * 100
-    y_s = df[df.index >= "2025-01-01"]['Close'].iloc[0]
-    y_c = ((curr - y_s) / y_s) * 100
-    vol_calc = np.log(df['Close'] / df['Close'].shift(1)).std() * np.sqrt(252) * 100
-
-    return df[df.index >= "2025-01-01"], curr, w_c, m_c, y_c, vol_calc
+    return df[df.index >= "2025-01-01"], float(df['Close'].iloc[-1]), df
 
 
-data, price, week_c, month_c, ytd_c, vol = get_data()
+data_display, price, df_full = get_data()
+data = data_display  # For the chart section
+
+# Calculate changes for metrics based on full dataframe
+w_c = ((price - float(df_full['Close'].iloc[-5])) / float(df_full['Close'].iloc[-5])) * 100
+m_c = ((price - float(df_full['Close'].iloc[-21])) / float(df_full['Close'].iloc[-21])) * 100
+y_s = df_full[df_full.index >= "2025-01-01"]['Close'].iloc[0]
+y_c = ((price - y_s) / y_s) * 100
+vol_calc = np.log(df_full['Close'] / df_full['Close'].shift(1)).std() * np.sqrt(252) * 100
 
 # --- 1. MARKET OVERVIEW ---
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
-colored_metric(c2, "Weekly Change", f"{week_c:+.2f}%", week_c)
-colored_metric(c3, "Monthly Change", f"{month_c:+.2f}%", month_c)
-colored_metric(c4, "YTD Change", f"{ytd_c:+.2f}%", ytd_c)
-colored_metric(c5, "Volatility", f"{vol:.2f}%", vol, is_vol=True)
+c1.metric("Current Price", f"${price:,.2f}", f"{w_c:+.2f}%")
+colored_metric(c2, "Weekly Change", f"{w_c:+.2f}%", w_c)
+colored_metric(c3, "Monthly Change", f"{m_c:+.2f}%", m_c)
+colored_metric(c4, "YTD Change", f"{y_c:+.2f}%", y_c)
+colored_metric(c5, "Volatility", f"{vol_calc:.2f}%", vol_calc, is_vol=True)
 st.divider()
 
 # --- 2. CHART SECTION ---
@@ -94,7 +105,6 @@ with col_charts:
         subplot_titles=("MARKET TREND & INDICATORS", "TRADING VOLUME")
     )
 
-    # Price & Indicators
     fig.add_trace(
         go.Candlestick(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'],
                        name="Price"), row=1, col=1)
@@ -108,53 +118,61 @@ with col_charts:
                              line=dict(color='rgba(173, 216, 230, 0.5)', dash='dash'), fill='tonexty',
                              fillcolor='rgba(173, 216, 230, 0.05)'), row=1, col=1)
 
-    # Volume
     v_colors = ['#26a69a' if c >= o else '#ef5350' for c, o in zip(data['Close'], data['Open'])]
     fig.add_trace(go.Bar(x=data.index, y=data['Volume'], marker_color=v_colors, name="Volume", opacity=0.8), row=2,
                   col=1)
     fig.update_yaxes(range=[0, data['Volume'].max() * 2.5], row=2, col=1)
 
-    # --- STYLE UPDATES ---
-    # 1. Center & Color Headers White
     fig.update_annotations(font=dict(size=24, color="white", family="Arial Black"))
-    fig.layout.annotations[0].update(x=0.5, xanchor='center', y=1.08)  # Market Trend Title
-    fig.layout.annotations[1].update(x=0.5, xanchor='center', y=0.28)  # Volume Title
+    fig.layout.annotations[0].update(x=0.5, xanchor='center', y=1.08)
+    fig.layout.annotations[1].update(x=0.5, xanchor='center', y=0.28)
 
-    # 2. Position Legend Below Main Header
     fig.update_layout(
-        template="plotly_dark",
-        xaxis_rangeslider_visible=False,
-        height=900,
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=1.04,  # Positioned just below the centered white title
-            xanchor="center",
-            x=0.5
-        ),
-        margin=dict(t=120, b=40, l=40, r=40)  # Extra top margin for the high header/legend
+        template="plotly_dark", xaxis_rangeslider_visible=False, height=900, showlegend=True,
+        legend=dict(orientation="h", yanchor="top", y=1.04, xanchor="center", x=0.5),
+        margin=dict(t=120, b=40, l=40, r=40)
     )
 
     y_min, y_max = data['Low'].min() * 0.99, data['High'].max() * 1.01
     fig.update_yaxes(range=[y_min, y_max], row=1, col=1)
-
     st.plotly_chart(fig, use_container_width=True)
 
 with col_signals:
-    st.subheader("📡 Key Trading Signals")
+    # Bigger White Header for Sidebar
+    st.markdown('<div class="sidebar-header">📡 TRADING SIGNALS</div>', unsafe_allow_html=True)
+
     latest = data.iloc[-1]
 
 
     def display_signal(label, value, status, color):
-        st.markdown(f"""<div class="signal-container"><small style='color:#808495'>{label}</small><br>
-            <span style='font-size: 20px; font-weight: bold;'>{value}</span>
-            <span style='color:{color}; float: right; font-weight: bold; margin-top: 5px;'>{status}</span></div>""",
-                    unsafe_allow_html=True)
+        st.markdown(f"""
+            <div class="signal-container">
+                <div style='color:white; font-size:16px; font-weight:bold; margin-bottom:5px;'>{label}</div>
+                <div style='display:flex; justify-content:space-between; align-items:center;'>
+                    <span style='color:white; font-size:26px; font-weight:bold;'>{value}</span>
+                    <span style='background-color:{color}; color:black; padding:2px 10px; border-radius:5px; font-weight:bold; font-size:14px;'>{status}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
 
-    display_signal("RSI (14)", f"{latest['RSI']:.1f}", "Neutral", "#808495")
-    display_signal("MACD", f"{latest['MACD']:.2f}", "Bullish" if latest['MACD'] > latest['MACD_Signal'] else "Bearish",
-                   "#00FF41")
-    display_signal("Stoch (%K)", f"{latest['STOCH_K']:.1f}%", "Active", "#FFA500")
-    display_signal("Trend", "Bullish" if latest['Close'] > latest['MA20'] else "Bearish", "LIVE", "#00FF41")
+    # Calculate status colors/text
+    rsi_val = latest['RSI']
+    rsi_stat = "OVERBOUGHT" if rsi_val > 70 else ("OVERSOLD" if rsi_val < 30 else "NEUTRAL")
+    rsi_col = "#FF3131" if rsi_val > 70 else ("#00FF41" if rsi_val < 30 else "#808495")
+
+    macd_val = latest['MACD']
+    macd_stat = "BULLISH" if macd_val > latest['MACD_Signal'] else "BEARISH"
+    macd_col = "#00FF41" if macd_val > latest['MACD_Signal'] else "#FF3131"
+
+    stoch_val = latest['STOCH_K']
+    stoch_stat = "OVERBOUGHT" if stoch_val > 80 else ("OVERSOLD" if stoch_val < 20 else "ACTIVE")
+    stoch_col = "#FF3131" if stoch_val > 80 else ("#00FF41" if stoch_val < 20 else "#FFA500")
+
+    trend_stat = "BULLISH" if latest['Close'] > latest['MA20'] else "BEARISH"
+    trend_col = "#00FF41" if trend_stat == "BULLISH" else "#FF3131"
+
+    display_signal("RSI (14)", f"{rsi_val:.1f}", rsi_stat, rsi_col)
+    display_signal("MACD", f"{macd_val:.2f}", macd_stat, macd_col)
+    display_signal("STOCH (%K)", f"{stoch_val:.1f}%", stoch_stat, stoch_col)
+    display_signal("TREND STRENGTH", trend_stat, "LIVE", trend_col)
