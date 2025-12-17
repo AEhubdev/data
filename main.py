@@ -50,16 +50,20 @@ data, price, week_c, month_c, ytd_c, vol = get_advanced_data()
 st.title("🏆 Gold Market Overview")
 c1, c2, c3, c4, c5 = st.columns(5)
 
-# Logic to pick colors based on numbers
-w_color = "green" if week_c > 0 else "red"
-m_color = "green" if month_c > 0 else "red"
-y_color = "green" if ytd_c > 0 else "red"
+# Calculate colors based on the data
+w_col = "green" if week_c > 0 else "red"
+m_col = "green" if month_c > 0 else "red"
+y_col = "green" if ytd_c > 0 else "red"
 
-# Apply colors using :color[] markdown syntax
+# c1: Current Price (Standard Blue)
 c1.metric("Current Price", f"${price:,.2f}", f"{week_c:+.2f}%")
-c2.metric("Weekly Change", f":{w_color}[{week_c:+.2f}%]", delta=week_c)
-c3.metric("Monthly Change", f":{m_color}[{month_c:+.2f}%]", delta=month_c)
-c4.metric("YTD Change", f":{y_color}[{ytd_c:+.2f}%]", delta=ytd_c)
+
+# c2-c4: The large numbers will now be GREEN or RED
+c2.metric("Weekly Change", f":{w_col}[{week_c:+.2f}%]", delta=f"{week_c:+.2f}%")
+c3.metric("Monthly Change", f":{m_col}[{month_c:+.2f}%]", delta=f"{month_c:+.2f}%")
+c4.metric("YTD Change", f":{y_col}[{ytd_c:+.2f}%]", delta=f"{ytd_c:+.2f}%")
+
+# c5: Volatility (Annualized)
 c5.metric("Volatility", f"{vol:.2f}%", "Annualized")
 
 st.divider()
